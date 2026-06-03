@@ -3,13 +3,15 @@ description: Write a rich narrative (Goal / Done / Failed / Next) into the hando
 ---
 
 Write or refresh the `<!-- narrative -->` block for the current branch's handoff.
-The handoff lives in the `refs/handoff/<branch>` ref, not the working tree.
+The handoff lives in this machine's `refs/handoff/<machine>/<branch>` ref, not the
+working tree.
 
 ## Gather context
 
 - `git status` and `git diff --stat HEAD`.
 - The conversation so far for what was tried and why.
-- Existing narrative: `git show refs/handoff/<branch>:HANDOFF.md` (if present).
+- Existing narrative (read via the refstore helper, which resolves this
+  machine's ref): `bash -c 'export REPO_ROOT=$(git rev-parse --show-toplevel); log() { :; }; source "<plugin_dir>/lib/refstore.sh"; ref_read "$(git symbolic-ref --short HEAD)" HANDOFF.md'` (if present).
 
 ## Produce the narrative block
 

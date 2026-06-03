@@ -5,9 +5,10 @@ description: Use when starting a session, when the user mentions handoff/resume/
 
 # Handoff
 
-Handoffs are stored in a dedicated git ref (`refs/handoff/<branch>`), not in
-the working tree. The Stop and SessionEnd hooks maintain them automatically —
-you never create them by hand.
+Handoffs are stored per machine in a dedicated git ref
+(`refs/handoff/<machine>/<branch>`), not in the working tree, so two machines on
+the same branch never overwrite each other. The Stop and SessionEnd hooks
+maintain them automatically — you never create them by hand.
 
 ## On session start
 

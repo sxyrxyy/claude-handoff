@@ -8,7 +8,10 @@ ref_machine() {
 }
 
 # Percent-encode anything outside [A-Za-z0-9._-] so a branch or machine name
-# becomes a single git-ref-safe path segment. Reversible via _ref_dec.
+# becomes a single git-ref-safe path segment. Reversible via _ref_dec for ASCII;
+# non-ASCII bytes are encoded per-char (not per-UTF-8-byte), so exotic names may
+# not round-trip for display -- refs stay valid and distinct regardless. ASCII
+# branch/host names (the norm) round-trip exactly.
 _ref_enc() {
   local s=$1 out= i c
   for (( i=0; i<${#s}; i++ )); do

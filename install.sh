@@ -31,7 +31,8 @@ cat <<EOF
 claude-handoff v2
 
 This is a Claude Code plugin. Install it via the plugin system. The
-manifest (.claude-plugin/plugin.json) wires the Stop + SessionEnd hooks;
+manifest (.claude-plugin/plugin.json) wires the Stop + SessionEnd +
+UserPromptSubmit hooks;
 the handoff skill and /handoff command are auto-discovered from the
 skills/ and commands/ directories:
 
