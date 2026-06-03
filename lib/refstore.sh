@@ -93,3 +93,47 @@ ref_fetch() {
   git -C "$REPO_ROOT" remote get-url origin >/dev/null 2>&1 || return 0
   timeout 30s git -C "$REPO_ROOT" fetch -q origin 'refs/handoff/*:refs/handoff/*' 2>>"${HANDOFF_LOG_PATH:-/dev/null}" || true
 }
+
+# List every machine with a note for <branch> (excludes the legacy bare ref).
+# Prints one line per machine: "<machine><TAB><refname>".
+ref_list_machines() {
+  local branch=$1 eb; eb=$(_ref_enc "$branch")
+  local r rest m
+  while IFS= read -r r; do
+    [ -n "$r" ] || continue
+    case "$r" in
+      refs/handoff/*/"$eb")
+        rest=${r#refs/handoff/}
+        m=${rest%/*}
+        case "$m" in */*) continue ;; esac   # skip deeper nesting
+        printf '%s\t%s\n' "$(_ref_dec "$m")" "$r"
+        ;;
+    esac
+  done < <(git -C "$REPO_ROOT" for-each-ref --format='%(refname)' refs/handoff/ 2>/dev/null)
+}
+
+# Dump every machine's note for <branch> (newest first), plus the legacy ref if
+# present, as delimited blocks for the resume skill to narrate.
+ref_resume_dump() {
+  local branch=$1 ct m r lr
+  {
+    while IFS=$'\t' read -r m r; do
+      [ -n "$r" ] || continue
+      ct=$(git -C "$REPO_ROOT" log -1 --format='%ct' "$r" 2>/dev/null); ct=${ct:-0}
+      printf '%s\t%s\t%s\n' "$ct" "$m" "$r"
+    done < <(ref_list_machines "$branch")
+    lr=$(_ref_legacy_name "$branch")
+    if git -C "$REPO_ROOT" rev-parse -q --verify "$lr" >/dev/null 2>&1; then
+      ct=$(git -C "$REPO_ROOT" log -1 --format='%ct' "$lr" 2>/dev/null); ct=${ct:-0}
+      printf '%s\t%s\t%s\n' "$ct" "(legacy)" "$lr"
+    fi
+  } | sort -rn | while IFS=$'\t' read -r ct m r; do
+    [ -n "$r" ] || continue
+    printf '===HANDOFF machine=%s ref=%s===\n' "$m" "$r"
+    git -C "$REPO_ROOT" show "$r:HANDOFF.md" 2>/dev/null || true
+    printf '\n---LOG (top entry)---\n'
+    git -C "$REPO_ROOT" show "$r:HANDOFF-LOG.md" 2>/dev/null \
+      | awk 'BEGIN{n=0} /^## /{n++} n>=2{exit} {print}'
+    printf '\n'
+  done
+}
