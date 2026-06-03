@@ -150,10 +150,35 @@ ref_resume_dump() {
   } | sort -rn | while IFS=$'\t' read -r ct m r; do
     [ -n "$r" ] || continue
     printf '===HANDOFF machine=%s ref=%s===\n' "$m" "$r"
+    printf 'url=%s\n' "$(ref_web_url "$r")"
     git -C "$REPO_ROOT" show "$r:HANDOFF.md" 2>/dev/null || true
     printf '\n---LOG (top entry)---\n'
     git -C "$REPO_ROOT" show "$r:HANDOFF-LOG.md" 2>/dev/null \
       | awk 'BEGIN{n=0} /^## /{n++} n>=2{exit} {print}'
     printf '\n'
   done
+}
+
+# Build a browseable web URL to a ref's HANDOFF.md (SHA-pinned permalink), or a
+# copy-pasteable `git show` command when the host is unknown / has no origin.
+ref_web_url() {
+  local ref=$1 sha url host owner_repo rest
+  sha=$(git -C "$REPO_ROOT" rev-parse "$ref" 2>/dev/null) \
+    || { printf 'git show %s:HANDOFF.md' "$ref"; return; }
+  url=$(git -C "$REPO_ROOT" remote get-url origin 2>/dev/null) \
+    || { printf 'git show %s:HANDOFF.md' "$ref"; return; }
+  case "$url" in
+    git@*)        rest=${url#git@};        host=${rest%%:*};  owner_repo=${rest#*:} ;;
+    ssh://git@*)  rest=${url#ssh://git@};  host=${rest%%/*};  owner_repo=${rest#*/} ;;
+    https://*|http://*) rest=${url#*://}; rest=${rest#*@}; host=${rest%%/*}; owner_repo=${rest#*/} ;;
+    *) printf 'git show %s:HANDOFF.md' "$ref"; return ;;
+  esac
+  owner_repo=${owner_repo%.git}
+  owner_repo=${owner_repo%/}
+  host=${host%%:*}
+  case "$host" in
+    github.com)            printf 'https://github.com/%s/blob/%s/HANDOFF.md' "$owner_repo" "$sha" ;;
+    gitlab.com|gitlab.*)   printf 'https://%s/%s/-/blob/%s/HANDOFF.md' "$host" "$owner_repo" "$sha" ;;
+    *)                     printf 'git show %s:HANDOFF.md' "$ref" ;;
+  esac
 }

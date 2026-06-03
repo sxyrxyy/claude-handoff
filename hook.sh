@@ -35,7 +35,8 @@ body=$(render_handoff "$narrative")
 journal=$(ref_read "$CAP_BRANCH" "HANDOFF-LOG.md")
 
 if ref_write "$CAP_BRANCH" "HANDOFF.md" "$body" "HANDOFF-LOG.md" "$journal"; then
-  log "wrote $(_ref_name "$CAP_BRANCH")"
+  ref=$(_ref_name "$CAP_BRANCH")
+  log "wrote $ref — $(ref_web_url "$ref")"
   # Push detached so a slow/unreachable remote never blocks the turn.
   ( nohup bash "$PLUGIN_DIR/lib/run-push.sh" "$REPO_ROOT" "$CAP_BRANCH" \
       >/dev/null 2>&1 & ) || true
