@@ -1,6 +1,6 @@
 ---
 name: handoff
-description: Use when starting a session, when the user mentions handoff/resume/"where was I"/"pick up where I left off", or when switching machines. Fetches the handoff ref and offers a propose-don't-act resume. Coexists with Stop/SessionEnd hooks that maintain the handoff automatically.
+description: Use when starting a session, when the user mentions handoff/resume/"where was I"/"pick up where I left off", or when switching machines. Aggregates every machine's handoff note for the branch and offers a propose-don't-act resume. Coexists with Stop/SessionEnd/UserPromptSubmit hooks that maintain the handoff automatically.
 ---
 
 # Handoff
@@ -14,18 +14,34 @@ you never create them by hand.
 1. Confirm cwd is a git repo. If not, do nothing.
 2. Fetch handoff refs (silent, non-fatal):
    `git fetch -q origin 'refs/handoff/*:refs/handoff/*' 2>/dev/null || true`
-3. Read the snapshot for the current branch:
-   `git show refs/handoff/<branch>:HANDOFF.md 2>/dev/null`
-   If it does not exist, do nothing and continue normally.
-4. Read recent rationale: `git show refs/handoff/<branch>:HANDOFF-LOG.md` (top entry).
-5. Detect drift: compare the recorded last commit against `git log -1 --format=%h`
-   and check `git status -s`. If the recorded commit differs from HEAD, note it.
+3. Dump every machine's note for the current branch. Run:
+   ```
+   bash -c 'source ~/.claude/handoff-plugin/lib/refstore.sh; \
+     export REPO_ROOT=$(git rev-parse --show-toplevel); \
+     ref_resume_dump "$(git symbolic-ref --short HEAD)"'
+   ```
+   Each note is a block headed `===HANDOFF machine=<name> ref=<ref>===`,
+   followed by a `url=<link>` line (a SHA-pinned GitHub/GitLab permalink to that
+   machine's `HANDOFF.md`, or a `git show …` command if the remote is not
+   GitHub/GitLab), then the machine's `HANDOFF.md`, then its top
+   `HANDOFF-LOG.md` entry. A block headed `machine=(legacy)` is a pre-upgrade
+   note from the old single-ref layout — treat it as one more machine. If the
+   dump is empty, do nothing and continue normally.
+4. Detect drift: compare the recorded last commit in the most recent note
+   against `git log -1 --format=%h` and check `git status -s`.
 
 ## What to present (propose, don't act)
 
-One short paragraph, then wait:
+One short paragraph for the most recent machine, then wait:
 
 > "Last on `<machine>`, `<age>` ago. **Goal:** `<goal>`. **Next:** `<the single next step>`. Avoid: `<top failed approach>`. Want me to pick this up?"
+
+If other machines also have notes, add one line:
+> "Also has notes: `<machine>` (`<age>`), `<machine>` (`<age>`)."
+
+Surface the `url=` value for the chosen note so the user can open the raw
+handoff directly:
+> "View: `<url>`"
 
 If drift was detected, add:
 > "Note: repo has moved since the handoff (handoff at `<sha>`, now at `<sha>`)."
@@ -34,7 +50,7 @@ If drift was detected, add:
 
 ## On confirmation
 
-1. Read the files listed under "Files touched this session".
+1. Read the files listed under "Files touched this session" in the chosen note.
 2. Summarize the current state and the proposed next step concretely.
 3. Ask the user to confirm the next step before executing it.
 
