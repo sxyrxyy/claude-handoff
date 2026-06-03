@@ -767,6 +767,132 @@ git commit -m "feat: register UserPromptSubmit hook in plugin manifest"
 
 ---
 
+## Task 5b: Handoff web URL (added 2026-06-02)
+
+**Files:**
+- Modify: `lib/refstore.sh` (add `ref_web_url`; emit `url=` in `ref_resume_dump`)
+- Modify: `hook.sh` (enrich the write-log line with the URL)
+- Test: `test/weburl.bats` (create)
+
+- [ ] **Step 1: Write the failing test.** Create `test/weburl.bats`:
+```bash
+# test/weburl.bats
+load helpers
+
+_url_for() { # <origin-url>  -> prints ref_web_url for refs/handoff/tm/main
+  bash -c '
+    log() { :; }
+    export REPO_ROOT="'"$REPO"'" HANDOFF_MACHINE_NAME="tm"
+    source "'"$PLUGIN_DIR"'/lib/refstore.sh"
+    ref_write "main" "HANDOFF.md" "x" "HANDOFF-LOG.md" ""
+    git -C "$REPO_ROOT" remote add origin "'"$1"'" 2>/dev/null || git -C "$REPO_ROOT" remote set-url origin "'"$1"'"
+    sha=$(git -C "$REPO_ROOT" rev-parse refs/handoff/tm/main)
+    echo "SHA=$sha"
+    ref_web_url refs/handoff/tm/main
+  '
+}
+
+@test "weburl: github ssh remote -> blob url" {
+  make_repo
+  run _url_for "git@github.com:foo/bar.git"
+  sha=$(echo "$output" | sed -n 's/^SHA=//p')
+  [[ "$output" == *"https://github.com/foo/bar/blob/$sha/HANDOFF.md"* ]]
+}
+
+@test "weburl: github https remote -> blob url" {
+  make_repo
+  run _url_for "https://github.com/foo/bar.git"
+  sha=$(echo "$output" | sed -n 's/^SHA=//p')
+  [[ "$output" == *"https://github.com/foo/bar/blob/$sha/HANDOFF.md"* ]]
+}
+
+@test "weburl: gitlab remote -> dash-blob url" {
+  make_repo
+  run _url_for "git@gitlab.com:foo/bar.git"
+  sha=$(echo "$output" | sed -n 's/^SHA=//p')
+  [[ "$output" == *"https://gitlab.com/foo/bar/-/blob/$sha/HANDOFF.md"* ]]
+}
+
+@test "weburl: unknown host falls back to git show command" {
+  make_repo
+  run _url_for "git@example.com:foo/bar.git"
+  [[ "$output" == *"git show refs/handoff/tm/main:HANDOFF.md"* ]]
+}
+
+@test "weburl: no origin falls back to git show command" {
+  make_repo
+  run bash -c '
+    log() { :; }
+    export REPO_ROOT="'"$REPO"'" HANDOFF_MACHINE_NAME="tm"
+    source "'"$PLUGIN_DIR"'/lib/refstore.sh"
+    ref_write "main" "HANDOFF.md" "x" "HANDOFF-LOG.md" ""
+    ref_web_url refs/handoff/tm/main
+  '
+  [[ "$output" == *"git show refs/handoff/tm/main:HANDOFF.md"* ]]
+}
+
+@test "weburl: ref_resume_dump includes a url= line" {
+  make_repo
+  git -C "$REPO" remote add origin "git@github.com:foo/bar.git"
+  run bash -c '
+    log() { :; }
+    export REPO_ROOT="'"$REPO"'" HANDOFF_MACHINE_NAME="tm"
+    source "'"$PLUGIN_DIR"'/lib/refstore.sh"
+    ref_write "main" "HANDOFF.md" "body" "HANDOFF-LOG.md" ""
+    ref_resume_dump "main"
+  '
+  [[ "$output" == *"url=https://github.com/foo/bar/blob/"* ]]
+}
+```
+
+- [ ] **Step 2: Run to verify it fails.** `bats test/weburl.bats` — FAIL (`ref_web_url` undefined; no `url=` line).
+
+- [ ] **Step 3: Add `ref_web_url` to `lib/refstore.sh`** (append):
+```bash
+# Build a browseable web URL to a ref's HANDOFF.md (SHA-pinned permalink), or a
+# copy-pasteable `git show` command when the host is unknown / has no origin.
+ref_web_url() {
+  local ref=$1 sha url host owner_repo rest
+  sha=$(git -C "$REPO_ROOT" rev-parse "$ref" 2>/dev/null) \
+    || { printf 'git show %s:HANDOFF.md' "$ref"; return; }
+  url=$(git -C "$REPO_ROOT" remote get-url origin 2>/dev/null) \
+    || { printf 'git show %s:HANDOFF.md' "$ref"; return; }
+  case "$url" in
+    git@*)        rest=${url#git@};        host=${rest%%:*};  owner_repo=${rest#*:} ;;
+    ssh://git@*)  rest=${url#ssh://git@};  host=${rest%%/*};  owner_repo=${rest#*/} ;;
+    https://*|http://*) rest=${url#*://}; rest=${rest#*@}; host=${rest%%/*}; owner_repo=${rest#*/} ;;
+    *) printf 'git show %s:HANDOFF.md' "$ref"; return ;;
+  esac
+  owner_repo=${owner_repo%.git}
+  case "$host" in
+    github.com)            printf 'https://github.com/%s/blob/%s/HANDOFF.md' "$owner_repo" "$sha" ;;
+    gitlab.com|gitlab.*)   printf 'https://%s/%s/-/blob/%s/HANDOFF.md' "$host" "$owner_repo" "$sha" ;;
+    *)                     printf 'git show %s:HANDOFF.md' "$ref" ;;
+  esac
+}
+```
+
+- [ ] **Step 4: Emit the URL in `ref_resume_dump`.** In `lib/refstore.sh`, in the final `while` loop of `ref_resume_dump`, immediately AFTER the header `printf '===HANDOFF machine=%s ref=%s===\n' "$m" "$r"` line, add:
+```bash
+    printf 'url=%s\n' "$(ref_web_url "$r")"
+```
+
+- [ ] **Step 5: Enrich the Stop-hook write-log line.** In `hook.sh`, change the line `log "wrote $(_ref_name "$CAP_BRANCH")"` to:
+```bash
+  log "wrote $(_ref_name "$CAP_BRANCH") — $(ref_web_url "$(_ref_name "$CAP_BRANCH")")"
+```
+
+- [ ] **Step 6: Run to verify pass.** `bats test/weburl.bats` then full `bats test/` — all PASS.
+
+- [ ] **Step 7: Commit.**
+```bash
+cd ~/.claude/handoff-plugin
+git add lib/refstore.sh hook.sh test/weburl.bats
+git commit -m "feat: ref_web_url — SHA-pinned GitHub/GitLab permalink for the handoff"
+```
+
+---
+
 ## Task 6: Multi-machine resume in the skill
 
 **Files:**
@@ -787,11 +913,13 @@ Replace the body between the `# Handoff` intro and the `## Trigger words` sectio
      export REPO_ROOT=$(git rev-parse --show-toplevel); \
      ref_resume_dump "$(git symbolic-ref --short HEAD)"'
    ```
-   Each note is a block headed `===HANDOFF machine=<name> ref=<ref>===` with the
-   machine's `HANDOFF.md` then its top `HANDOFF-LOG.md` entry. A block headed
-   `machine=(legacy)` is a pre-upgrade note from the old single-ref layout —
-   treat it as one more machine. If the dump is empty, do nothing and continue
-   normally.
+   Each note is a block headed `===HANDOFF machine=<name> ref=<ref>===`,
+   followed by a `url=<link>` line (a SHA-pinned GitHub/GitLab permalink to that
+   machine's `HANDOFF.md`, or a `git show …` command if the remote is not
+   GitHub/GitLab), then the machine's `HANDOFF.md`, then its top
+   `HANDOFF-LOG.md` entry. A block headed `machine=(legacy)` is a pre-upgrade
+   note from the old single-ref layout — treat it as one more machine. If the
+   dump is empty, do nothing and continue normally.
 4. Detect drift: compare the recorded last commit in the most recent note
    against `git log -1 --format=%h` and check `git status -s`.
 
@@ -806,6 +934,10 @@ If other machines also have notes, add one line:
 
 If drift was detected, add:
 > "Note: repo has moved since the handoff (handoff at `<sha>`, now at `<sha>`)."
+
+Also surface the `url=` value for the chosen note so the user can open the raw
+handoff directly:
+> "View: `<url>`"
 
 **Do not** auto-read files, auto-run tests, or start work until the user confirms.
 
@@ -863,6 +995,12 @@ While a session runs, the Stop hook also pulls other machines' notes in the
 background (throttled by `HANDOFF_FETCH_THROTTLE_SECS`, default 60s), and a
 `UserPromptSubmit` hook surfaces a one-line heads-up the first time another
 machine's note changes.
+
+Each note has a SHA-pinned web permalink. Although the handoff lives in a
+non-branch ref, the commit it points to is pushed to the remote, so GitHub
+(`/blob/<sha>/HANDOFF.md`) and GitLab (`/-/blob/<sha>/HANDOFF.md`) render it by
+SHA. The resume skill shows this link per machine (other remotes get a
+`git show <ref>:HANDOFF.md` command instead).
 ```
 Add the new env vars to any existing "Optional config" list:
 ```markdown

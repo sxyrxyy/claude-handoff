@@ -191,6 +191,28 @@ All in `~/.claude/handoff-plugin` unless noted:
 - `README.md` — document per-machine model + new behavior/env.
 - `~/.claude/settings.json` (local only, not committed) — mirror UserPromptSubmit.
 
+### 5. Handoff web URL (added 2026-06-02)
+
+The handoff is hard to reach by hand. Although it lives in a non-branch ref
+(`refs/handoff/<machine>/<branch>`), the *commit* it points to is pushed to the
+remote, so GitHub/GitLab can serve it **by commit SHA** even though the ref
+name is not browsable. Verified against the live repo: a `/blob/<sha>/HANDOFF.md`
+URL for a commit reachable only from `refs/handoff/master` renders correctly.
+
+- New helper `ref_web_url <ref>` in `lib/refstore.sh`: resolves the ref's SHA
+  and the `origin` URL, normalizes `git@host:owner/repo(.git)`, `ssh://` and
+  `https://` forms, and emits:
+  - GitHub: `https://github.com/<owner>/<repo>/blob/<sha>/HANDOFF.md`
+  - GitLab: `https://<host>/<owner>/<repo>/-/blob/<sha>/HANDOFF.md`
+  - Anything else (unknown host, no origin, no SHA): the `git show <ref>:HANDOFF.md`
+    command as a copy-pasteable fallback.
+- The URL is SHA-pinned (an immutable permalink); each push yields a new one.
+- `ref_resume_dump` emits a `url=<...>` line in each machine's block so the
+  resume skill can surface it. The Stop-hook write-log line is enriched with the
+  URL too (the push runs detached, so its only visible record is the log).
+
+This is GitHub/GitLab only by design; other hosts get the git-command fallback.
+
 ## Testing (`test/*.bats`, extending the existing suite)
 
 - Ref encoding round-trips a slashed branch (`feature/x`).
@@ -204,6 +226,9 @@ All in `~/.claude/handoff-plugin` unless noted:
   same sha twice does not re-emit; own machine never self-notifies.
 - UserPromptSubmit hook always exits 0 even on malformed state (never blocks a
   prompt).
+- `ref_web_url` builds a GitHub blob URL from a `git@`/`https://` origin, a
+  GitLab `/-/blob/` URL, and falls back to `git show <ref>:HANDOFF.md` for an
+  unknown host / no origin.
 
 ## Error handling
 
