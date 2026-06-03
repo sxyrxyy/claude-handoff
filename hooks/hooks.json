@@ -5,6 +5,9 @@
     ],
     "SessionEnd": [
       { "hooks": [ { "type": "command", "command": "bash \"${CLAUDE_PLUGIN_ROOT}/session-end.sh\"", "timeout": 120 } ] }
+    ],
+    "UserPromptSubmit": [
+      { "hooks": [ { "type": "command", "command": "bash \"${CLAUDE_PLUGIN_ROOT}/user-prompt.sh\"", "timeout": 10 } ] }
     ]
   }
 }
