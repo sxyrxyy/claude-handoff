@@ -35,10 +35,16 @@ body=$(render_handoff "$narrative")
 journal=$(ref_read "$CAP_BRANCH" "HANDOFF-LOG.md")
 
 if ref_write "$CAP_BRANCH" "HANDOFF.md" "$body" "HANDOFF-LOG.md" "$journal"; then
-  log "wrote refs/handoff/$CAP_BRANCH"
+  log "wrote $(_ref_name "$CAP_BRANCH")"
   # Push detached so a slow/unreachable remote never blocks the turn.
   ( nohup bash "$PLUGIN_DIR/lib/run-push.sh" "$REPO_ROOT" "$CAP_BRANCH" \
       >/dev/null 2>&1 & ) || true
+fi
+
+# Pull other machines' notes in the background (throttled) so a long-running
+# session stays current. Detached so the network never blocks the turn.
+if fetch_due; then
+  ( nohup bash "$PLUGIN_DIR/lib/run-fetch.sh" "$REPO_ROOT" >/dev/null 2>&1 & ) || true
 fi
 
 # Fire the summarizer detached if the debounce window has elapsed.
