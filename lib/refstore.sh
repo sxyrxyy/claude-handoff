@@ -1,8 +1,36 @@
-# refstore.sh - read/write/push handoff content to refs/handoff/<branch>
+# refstore.sh - read/write/push handoff content to refs/handoff/<machine>/<branch>
 # WITHOUT touching the working tree or index, via git plumbing.
 # Requires REPO_ROOT and a log() function in scope.
 
-_ref_name() { echo "refs/handoff/$1"; }
+# Machine name for ref namespacing -- matches capture.sh CAP_HOST.
+ref_machine() {
+  printf '%s' "${HANDOFF_MACHINE_NAME:-$(hostname -s 2>/dev/null || hostname)}"
+}
+
+# Percent-encode anything outside [A-Za-z0-9._-] so a branch or machine name
+# becomes a single git-ref-safe path segment. Reversible via _ref_dec.
+_ref_enc() {
+  local s=$1 out= i c
+  for (( i=0; i<${#s}; i++ )); do
+    c=${s:i:1}
+    case "$c" in
+      [A-Za-z0-9._-]) out+=$c ;;
+      *) out+=$(printf '%%%02X' "'$c") ;;
+    esac
+  done
+  printf '%s' "$out"
+}
+
+# Reverse _ref_enc for display (%2F -> /).
+_ref_dec() { printf '%b' "${1//%/\\x}"; }
+
+# This machine's ref for a branch: refs/handoff/<enc-machine>/<enc-branch>.
+_ref_name() {
+  printf 'refs/handoff/%s/%s' "$(_ref_enc "$(ref_machine)")" "$(_ref_enc "$1")"
+}
+
+# Legacy (pre-per-machine) ref, branch unencoded: refs/handoff/<branch>.
+_ref_legacy_name() { printf 'refs/handoff/%s' "$1"; }
 
 # ref_write <branch> <fileA> <contentA> <fileB> <contentB>
 # Builds a tree of the two files and commits it to the handoff ref,

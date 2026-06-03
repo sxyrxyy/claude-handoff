@@ -14,8 +14,10 @@ if [ "${1:-}" = "--verify" ]; then
   rc=$?
   rm -f "$tx"
   branch="$(git -C "$repo" symbolic-ref --short HEAD 2>/dev/null || echo main)"
-  if git -C "$repo" rev-parse -q --verify "refs/handoff/$branch" >/dev/null 2>&1; then
-    echo "OK: refs/handoff/$branch written."
+  source "$PLUGIN_DIR/lib/refstore.sh"
+  ref="$(_ref_name "$branch")"
+  if git -C "$repo" rev-parse -q --verify "$ref" >/dev/null 2>&1; then
+    echo "OK: $ref written."
     exit 0
   fi
   echo "FAILED: no handoff ref written (rc=$rc). Check ~/.claude/hooks/handoff.log"

@@ -10,7 +10,8 @@ load helpers
   echo "{\"cwd\":\"$REPO\",\"transcript_path\":\"$tx\"}" \
     | HANDOFF_LOG_PATH="$BATS_TEST_TMPDIR/h.log" PATH="$BATS_TEST_TMPDIR/bin:$PATH" \
       FAKE_CLAUDE_OUT="$FAKE_CLAUDE_OUT" \
+      HANDOFF_MACHINE_NAME="tm" \
       bash "$PLUGIN_DIR/session-end.sh"
-  run git -C "$REPO" show refs/handoff/main:HANDOFF.md
+  run git -C "$REPO" show refs/handoff/tm/main:HANDOFF.md
   [[ "$output" == *"done-test"* ]]
 }

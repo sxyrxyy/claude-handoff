@@ -11,6 +11,7 @@ run_hook() {
   echo "{\"hook_event_name\":\"Stop\",\"cwd\":\"$REPO\",\"transcript_path\":\"$1\"}" \
     | HANDOFF_SUMMARY_DEBOUNCE_SECS=999999 \
       HANDOFF_LOG_PATH="$BATS_TEST_TMPDIR/h.log" \
+      HANDOFF_MACHINE_NAME="tm" \
       bash "$PLUGIN_DIR/hook.sh"
 }
 
@@ -20,7 +21,7 @@ run_hook() {
   run run_hook "$tx"
   [ "$status" -eq 0 ]
   [ ! -f "$REPO/HANDOFF.md" ]
-  run git -C "$REPO" show refs/handoff/main:HANDOFF.md
+  run git -C "$REPO" show refs/handoff/tm/main:HANDOFF.md
   [[ "$output" == *"<!-- auto -->"* ]]
   [[ "$output" == *"Build complete."* ]]
 }

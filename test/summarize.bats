@@ -144,6 +144,7 @@ SH
     export REPO_ROOT="'"$REPO"'" TRANSCRIPT="'"$tx"'" FAKE_CLAUDE_OUT="'"$FAKE_CLAUDE_OUT"'"
     export PATH="'"$BATS_TEST_TMPDIR"'/bin:$PATH"
     export XDG_STATE_HOME="'"$BATS_TEST_TMPDIR"'/state"
+    export HANDOFF_MACHINE_NAME="tm"
     source "'"$PLUGIN_DIR"'/lib/refstore.sh"
     source "'"$PLUGIN_DIR"'/lib/redact.sh"
     source "'"$PLUGIN_DIR"'/lib/render.sh"
@@ -152,7 +153,7 @@ SH
     lkey=$(printf "%s" "$REPO_ROOT/main" | cksum | awk "{print \$1}")
     mkdir "$statedir/$lkey.lock"
     summarize_handoff "main"; echo "rc=$?"
-    git -C "$REPO_ROOT" show refs/handoff/main:HANDOFF.md 2>/dev/null || echo "NO-REF"
+    git -C "$REPO_ROOT" show refs/handoff/tm/main:HANDOFF.md 2>/dev/null || echo "NO-REF"
   '
   [[ "$output" == *"rc=0"* ]]
   [[ "$output" == *"NO-REF"* ]]
@@ -170,6 +171,7 @@ SH
     export REPO_ROOT="'"$REPO"'" TRANSCRIPT="'"$tx"'" FAKE_CLAUDE_OUT="'"$FAKE_CLAUDE_OUT"'"
     export PATH="'"$BATS_TEST_TMPDIR"'/bin:$PATH"
     export XDG_STATE_HOME="'"$BATS_TEST_TMPDIR"'/state"
+    export HANDOFF_MACHINE_NAME="tm"
     source "'"$PLUGIN_DIR"'/lib/refstore.sh"
     source "'"$PLUGIN_DIR"'/lib/redact.sh"
     source "'"$PLUGIN_DIR"'/lib/render.sh"
@@ -179,7 +181,7 @@ SH
     mkdir "$statedir/$lkey.lock"
     touch -d "10 minutes ago" "$statedir/$lkey.lock"
     summarize_handoff "main"
-    git -C "$REPO_ROOT" show refs/handoff/main:HANDOFF.md
+    git -C "$REPO_ROOT" show refs/handoff/tm/main:HANDOFF.md
   '
   [[ "$output" == *"stole-lock"* ]]
 }
