@@ -1,0 +1,6 @@
+{
+  "name": "claude-handoff",
+  "version": "2.0.0",
+  "description": "Cross-machine handoffs via a dedicated git ref, with a headless Haiku summarizer and propose-don't-act resume.",
+  "hooks": "./hooks/hooks.json"
+}
