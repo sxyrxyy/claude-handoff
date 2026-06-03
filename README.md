@@ -45,7 +45,24 @@ Called by the SessionEnd hook and the debounced detached spawn from the Stop hoo
 
 ### Resume (`handoff` skill)
 
-On session start in a repo that has a handoff ref, the skill fetches `refs/handoff/*`, reads `HANDOFF.md` and the top entry of `HANDOFF-LOG.md`, detects drift between the recorded commit and current HEAD, and presents a one-paragraph resume proposal — then **waits for confirmation**. It does not auto-read files, auto-run tests, or start work.
+Handoffs are stored per machine in `refs/handoff/<machine>/<branch>` (machine
+name from `HANDOFF_MACHINE_NAME`, else `hostname -s`). Two machines on the same
+branch never overwrite each other. On session start the skill fetches
+`refs/handoff/*`, aggregates every machine's note for the branch (plus a legacy
+`refs/handoff/<branch>` ref if one predates the upgrade), detects drift between
+the recorded commit and current HEAD, and presents a one-paragraph resume
+proposal — then **waits for confirmation**.
+
+While a session runs, the Stop hook also pulls other machines' notes in the
+background (throttled by `HANDOFF_FETCH_THROTTLE_SECS`, default 60s), and a
+`UserPromptSubmit` hook surfaces a one-line heads-up the first time another
+machine's note changes.
+
+Each note has a SHA-pinned web permalink. Although the handoff lives in a
+non-branch ref, the commit it points to is pushed to the remote, so GitHub
+(`/blob/<sha>/HANDOFF.md`) and GitLab (`/-/blob/<sha>/HANDOFF.md`) render it by
+SHA. The resume skill shows this link per machine (other remotes get a
+`git show <ref>:HANDOFF.md` command instead).
 
 The `/handoff` command lets you trigger a manual rich narrative pass beyond what the summarizer writes automatically.
 
@@ -135,6 +152,7 @@ bash /path/to/claude-handoff/install.sh --verify .
 | `HANDOFF_MACHINE_NAME` | `hostname -s` | Friendly machine name shown in `HANDOFF.md`. Useful if two machines have the same hostname. |
 | `HANDOFF_SUMMARY_MODEL` | `claude-haiku-4-5` | Model used by the Haiku summarizer. |
 | `HANDOFF_SUMMARY_DEBOUNCE_SECS` | `300` | Minimum seconds between mid-session summarizer runs from the Stop hook. |
+| `HANDOFF_FETCH_THROTTLE_SECS` | `60` | Minimum seconds between background fetches of other machines' notes (Stop hook). |
 | `HANDOFF_MAX_MESSAGE_CHARS` | `2000` | Truncation length for the captured last assistant message (applied after redaction). |
 | `HANDOFF_LOG_MAX_ENTRIES` | unset (unlimited) | Trim `HANDOFF-LOG.md` to N newest entries. |
 | `HANDOFF_LOG_PATH` | `~/.claude/hooks/handoff.log` | Where the hook's own debug log goes. |
@@ -170,9 +188,10 @@ claude-handoff/
 ├── .claude-plugin/
 │   └── plugin.json          # plugin manifest: hooks, skill, command
 ├── hooks/
-│   └── hooks.json           # Stop + SessionEnd hook declarations
+│   └── hooks.json           # Stop + SessionEnd + UserPromptSubmit hook declarations
 ├── hook.sh                  # Stop hook entrypoint
 ├── session-end.sh           # SessionEnd hook entrypoint
+├── user-prompt.sh           # UserPromptSubmit hook: other-machine heads-up
 ├── lib/
 │   ├── preflight.sh         # bail checks + shared-repo detection
 │   ├── capture.sh           # git + transcript → CAP_* vars
@@ -180,7 +199,9 @@ claude-handoff/
 │   ├── render.sh            # assemble HANDOFF.md, preserve narrative
 │   ├── refstore.sh          # git plumbing: read/write/push handoff ref
 │   ├── debounce.sh          # rate-limit summarizer per repo+branch
+│   ├── headsup.sh           # diff other machines' notes; emit heads-up line
 │   ├── summarize.sh         # claude -p Haiku → narrative + journal
+│   ├── run-fetch.sh         # detached wrapper: throttled fetch of remote refs
 │   ├── run-push.sh          # detached wrapper: push ref
 │   └── run-summarize.sh     # detached wrapper: run summarizer
 ├── skills/handoff/
@@ -192,13 +213,17 @@ claude-handoff/
     ├── helpers.bash
     ├── capture.bats
     ├── debounce.bats
+    ├── fetch.bats
+    ├── headsup.bats
     ├── hook.bats
     ├── install.bats
+    ├── perref.bats
     ├── preflight.bats
     ├── redact.bats
     ├── refstore.bats
     ├── render.bats
     ├── session-end.bats
     ├── smoke.bats
-    └── summarize.bats
+    ├── summarize.bats
+    └── weburl.bats
 ```
